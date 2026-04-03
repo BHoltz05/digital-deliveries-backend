@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum App {
+  DD
+  RF
+}
+
+model Account {
+  id            String    @id @default(uuid())
+  app           App
+  email         String
+  passwordHash  String    @map("password_hash")
+  unifiedUserId String?   @map("unified_user_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  ddProfile     DdProfile?
+
+  @@unique([app, email])
+  @@index([email])
+  @@index([unifiedUserId])
+  @@map("accounts")
+}
+
+model DdProfile {
+  id        String   @id @default(uuid())
+  accountId String   @unique @map("account_id")
+  postcode  String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("dd_profile")
+}
+
+model Store {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  city      String?
+  postcode  String?
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  products  StoreProduct[]
+
+  @@map("stores")
+}
+
+model Product {
+  id        String   @id @default(uuid())
+  name      String
+  brand     String?
+  unit      String?  // e.g. "500g", "1L", "each"
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  stores    StoreProduct[]
+
+  @@map("products")
+}
+
+model StoreProduct {
+  storeId   String   @map("store_id")
+  productId String   @map("product_id")
+
+  pricePence Int     @map("price_pence") // store as integer, avoids float issues
+  inStock    Boolean @default(true) @map("in_stock")
+
+  store     Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([storeId, productId])
+  @@index([productId])
+  @@map("store_products")
+}
