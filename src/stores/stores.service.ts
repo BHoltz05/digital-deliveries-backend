@@ -122,8 +122,7 @@ export class StoresService {
       stores: storesWithDistance,
     };
   }
-}
-async getStoreProducts(storeId: string) {
+  async getStoreProducts(storeId: string) {
   const store = await this.prisma.store.findUnique({
     where: { id: storeId },
   });
@@ -151,4 +150,5 @@ async getStoreProducts(storeId: string) {
       inStock: sp.inStock,
     })),
   };
+}
 }
