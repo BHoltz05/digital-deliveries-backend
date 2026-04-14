@@ -12,15 +12,15 @@ enum App {
 }
 
 model Account {
-  id            String    @id @default(uuid())
+  id            String   @id @default(uuid())
   app           App
   email         String
-  passwordHash  String    @map("password_hash")
-  unifiedUserId String?   @map("unified_user_id")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  passwordHash  String   @map("password_hash")
+  unifiedUserId String?  @map("unified_user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
-  ddProfile     DdProfile?
+  ddProfile DdProfile?
 
   @@unique([app, email])
   @@index([email])
@@ -35,7 +35,7 @@ model DdProfile {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@map("dd_profile")
 }
@@ -51,7 +51,8 @@ model Store {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  products  StoreProduct[]
+  products    StoreProduct[]
+  storeOrders StoreOrder[]
 
   @@map("stores")
 }
@@ -60,26 +61,70 @@ model Product {
   id        String   @id @default(uuid())
   name      String
   brand     String?
-  unit      String?  // e.g. "500g", "1L", "each"
+  unit      String?
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  stores    StoreProduct[]
+  stores          StoreProduct[]
+  storeOrderItems StoreOrderItem[]
 
   @@map("products")
 }
 
 model StoreProduct {
-  storeId   String   @map("store_id")
-  productId String   @map("product_id")
+  storeId   String @map("store_id")
+  productId String @map("product_id")
 
-  pricePence Int     @map("price_pence") // store as integer, avoids float issues
+  pricePence Int     @map("price_pence")
   inStock    Boolean @default(true) @map("in_stock")
 
-  store     Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@id([storeId, productId])
   @@index([productId])
   @@map("store_products")
+}
+
+model Order {
+  id        String   @id @default(uuid())
+  accountId String   @map("account_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  storeOrders StoreOrder[]
+
+  @@index([accountId])
+  @@map("orders")
+}
+
+model StoreOrder {
+  id        String   @id @default(uuid())
+  orderId   String   @map("order_id")
+  storeId   String   @map("store_id")
+  status    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  items StoreOrderItem[]
+
+  @@index([orderId])
+  @@index([storeId])
+  @@map("store_orders")
+}
+
+model StoreOrderItem {
+  id           String @id @default(uuid())
+  storeOrderId String @map("store_order_id")
+  productId    String @map("product_id")
+  quantity     Int
+  pricePence   Int    @map("price_pence")
+
+  storeOrder StoreOrder @relation(fields: [storeOrderId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([storeOrderId])
+  @@index([productId])
+  @@map("store_order_items")
 }

@@ -123,3 +123,32 @@ export class StoresService {
     };
   }
 }
+async getStoreProducts(storeId: string) {
+  const store = await this.prisma.store.findUnique({
+    where: { id: storeId },
+  });
+
+  if (!store) {
+    throw new NotFoundException('Store not found');
+  }
+
+  const storeProducts = await this.prisma.storeProduct.findMany({
+    where: { storeId },
+    include: {
+      product: true,
+    },
+  });
+
+  return {
+    storeId,
+    count: storeProducts.length,
+    products: storeProducts.map((sp) => ({
+      productId: sp.product.id,
+      name: sp.product.name,
+      brand: sp.product.brand,
+      unit: sp.product.unit,
+      pricePence: sp.pricePence,
+      inStock: sp.inStock,
+    })),
+  };
+}

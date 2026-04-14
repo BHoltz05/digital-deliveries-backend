@@ -3,6 +3,7 @@ import {
   Get,
   Headers,
   Query,
+  Param,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -16,27 +17,38 @@ export class StoresController {
     private readonly jwtService: JwtService,
   ) {}
 
-  @Get('nearby')
-  async getNearbyStores(
-    @Headers('authorization') authorization: string | undefined,
-    @Query() query: NearbyStoresDto,
-  ) {
+  private async validateToken(authorization: string | undefined) {
     if (!authorization || !authorization.startsWith('Bearer ')) {
       throw new UnauthorizedException('Missing or invalid authorization header');
     }
 
     const token = authorization.replace('Bearer ', '').trim();
 
-    let payload: any;
-
     try {
-      payload = await this.jwtService.verifyAsync(token, {
+      return await this.jwtService.verifyAsync(token, {
         secret: process.env.JWT_SECRET,
       });
     } catch {
       throw new UnauthorizedException('Invalid or expired token');
     }
+  }
 
+  @Get('nearby')
+  async getNearbyStores(
+    @Headers('authorization') authorization: string | undefined,
+    @Query() query: NearbyStoresDto,
+  ) {
+    const payload = await this.validateToken(authorization);
     return this.storesService.getNearbyStores(payload.accountId, query);
+  }
+
+  // 🔥 NEW ENDPOINT
+  @Get(':id/products')
+  async getStoreProducts(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('id') storeId: string,
+  ) {
+    await this.validateToken(authorization);
+    return this.storesService.getStoreProducts(storeId);
   }
 }
