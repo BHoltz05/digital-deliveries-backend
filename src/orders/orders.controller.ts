@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Param,
   Headers,
   Body,
@@ -57,5 +58,15 @@ export class OrdersController {
   ) {
     const payload = await this.validateToken(authorization);
     return this.ordersService.getOrderById(payload.accountId, orderId);
+  }
+
+  @Patch(':id/status')
+  async updateOrderStatus(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('id') orderId: string,
+    @Body() body: any,
+  ) {
+    const payload = await this.validateToken(authorization);
+    return this.ordersService.updateOrderStatus(payload.accountId, orderId, body);
   }
 }
