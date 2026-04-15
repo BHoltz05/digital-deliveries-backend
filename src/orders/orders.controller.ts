@@ -1,8 +1,10 @@
 import {
   Controller,
   Post,
-  Body,
+  Get,
+  Param,
   Headers,
+  Body,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -38,5 +40,22 @@ export class OrdersController {
   ) {
     const payload = await this.validateToken(authorization);
     return this.ordersService.createOrder(payload.accountId, body);
+  }
+
+  @Get()
+  async getOrders(
+    @Headers('authorization') authorization: string | undefined,
+  ) {
+    const payload = await this.validateToken(authorization);
+    return this.ordersService.getOrders(payload.accountId);
+  }
+
+  @Get(':id')
+  async getOrderById(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('id') orderId: string,
+  ) {
+    const payload = await this.validateToken(authorization);
+    return this.ordersService.getOrderById(payload.accountId, orderId);
   }
 }
