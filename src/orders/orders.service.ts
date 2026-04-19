@@ -14,6 +14,13 @@ const VALID_STATUSES = [
 
 type OrderStatus = (typeof VALID_STATUSES)[number];
 
+const ALLOWED_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  PENDING: ['CONFIRMED'],
+  CONFIRMED: ['OUT_FOR_DELIVERY'],
+  OUT_FOR_DELIVERY: ['DELIVERED'],
+  DELIVERED: [],
+};
+
 @Injectable()
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -25,7 +32,7 @@ export class OrdersService {
       throw new BadRequestException('Invalid stores payload');
     }
 
-    return this.prisma.order.create({
+    const createdOrder = await this.prisma.order.create({
       data: {
         accountId,
         storeOrders: {
@@ -83,23 +90,23 @@ export class OrdersService {
           ),
         },
       },
-      include: {
-        storeOrders: {
-          include: {
-            items: true,
-          },
-        },
-      },
     });
+
+    return this.getOrderById(accountId, createdOrder.id);
   }
 
   async getOrders(accountId: string) {
-    return this.prisma.order.findMany({
+    const orders = await this.prisma.order.findMany({
       where: { accountId },
       include: {
         storeOrders: {
           include: {
-            items: true,
+            store: true,
+            items: {
+              include: {
+                product: true,
+              },
+            },
           },
         },
       },
@@ -107,6 +114,8 @@ export class OrdersService {
         createdAt: 'desc',
       },
     });
+
+    return orders.map((order) => this.mapOrderResponse(order));
   }
 
   async getOrderById(accountId: string, orderId: string) {
@@ -118,7 +127,12 @@ export class OrdersService {
       include: {
         storeOrders: {
           include: {
-            items: true,
+            store: true,
+            items: {
+              include: {
+                product: true,
+              },
+            },
           },
         },
       },
@@ -128,7 +142,7 @@ export class OrdersService {
       throw new NotFoundException('Order not found');
     }
 
-    return order;
+    return this.mapOrderResponse(order);
   }
 
   async updateOrderStatus(accountId: string, orderId: string, body: any) {
@@ -158,6 +172,25 @@ export class OrdersService {
       throw new NotFoundException('No store orders found for this order');
     }
 
+    const currentStatuses = [
+      ...new Set(existingOrder.storeOrders.map((storeOrder) => storeOrder.status)),
+    ];
+
+    if (currentStatuses.length !== 1) {
+      throw new BadRequestException(
+        'Order has mixed store order statuses and cannot be updated together',
+      );
+    }
+
+    const currentStatus = currentStatuses[0] as OrderStatus;
+    const allowedNextStatuses = ALLOWED_STATUS_TRANSITIONS[currentStatus] ?? [];
+
+    if (!allowedNextStatuses.includes(status as OrderStatus)) {
+      throw new BadRequestException(
+        `Invalid status transition from ${currentStatus} to ${status}`,
+      );
+    }
+
     await this.prisma.storeOrder.updateMany({
       where: {
         orderId: existingOrder.id,
@@ -167,18 +200,32 @@ export class OrdersService {
       },
     });
 
-    return this.prisma.order.findFirst({
-      where: {
-        id: orderId,
-        accountId,
-      },
-      include: {
-        storeOrders: {
-          include: {
-            items: true,
-          },
-        },
-      },
-    });
+    return this.getOrderById(accountId, orderId);
+  }
+
+  private mapOrderResponse(order: any) {
+    return {
+      id: order.id,
+      accountId: order.accountId,
+      createdAt: order.createdAt,
+      storeOrders: order.storeOrders.map((storeOrder: any) => ({
+        id: storeOrder.id,
+        orderId: storeOrder.orderId,
+        storeId: storeOrder.storeId,
+        storeName: storeOrder.store?.name ?? null,
+        status: storeOrder.status,
+        createdAt: storeOrder.createdAt,
+        items: storeOrder.items.map((item: any) => ({
+          id: item.id,
+          storeOrderId: item.storeOrderId,
+          productId: item.productId,
+          productName: item.product?.name ?? null,
+          brand: item.product?.brand ?? null,
+          unit: item.product?.unit ?? null,
+          quantity: item.quantity,
+          pricePence: item.pricePence,
+        })),
+      })),
+    };
   }
 }
