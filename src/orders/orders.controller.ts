@@ -51,6 +51,32 @@ export class OrdersController {
     return this.ordersService.getOrders(payload.accountId);
   }
 
+  @Get('driver/active')
+  async getDriverActiveOrders(
+    @Headers('authorization') authorization: string | undefined,
+  ) {
+    await this.validateToken(authorization);
+    return this.ordersService.getDriverActiveOrders();
+  }
+
+  @Post('from-recipescout/preview')
+  async previewFromRecipeScout(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: any,
+  ) {
+    await this.validateToken(authorization);
+    return this.ordersService.previewFromRecipeScout(body);
+  }
+
+  @Post('from-recipescout/create')
+  async createFromRecipeScout(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: any,
+  ) {
+    const payload = await this.validateToken(authorization);
+    return this.ordersService.createFromRecipeScout(payload.accountId, body);
+  }
+
   @Get(':id')
   async getOrderById(
     @Headers('authorization') authorization: string | undefined,

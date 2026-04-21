@@ -118,6 +118,42 @@ export class OrdersService {
     return orders.map((order) => this.mapOrderResponse(order));
   }
 
+  async getDriverActiveOrders() {
+    const orders = await this.prisma.order.findMany({
+      where: {
+        storeOrders: {
+          some: {
+            status: {
+              not: 'DELIVERED',
+            },
+          },
+        },
+      },
+      include: {
+        storeOrders: {
+          where: {
+            status: {
+              not: 'DELIVERED',
+            },
+          },
+          include: {
+            store: true,
+            items: {
+              include: {
+                product: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return orders.map((order) => this.mapOrderResponse(order));
+  }
+
   async getOrderById(accountId: string, orderId: string) {
     const order = await this.prisma.order.findFirst({
       where: {
@@ -201,6 +237,130 @@ export class OrdersService {
     });
 
     return this.getOrderById(accountId, orderId);
+  }
+
+  async previewFromRecipeScout(body: any) {
+    const { items } = body;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      throw new BadRequestException('Invalid items payload');
+    }
+
+    const matched: any[] = [];
+    const unmatched: any[] = [];
+
+    for (const item of items) {
+      const rawName = item.name;
+      const name = rawName?.trim();
+
+      if (!name) {
+        unmatched.push({ requestedName: rawName });
+        continue;
+      }
+
+      const quantity =
+        typeof item.quantity === 'number' && Number.isInteger(item.quantity) && item.quantity > 0
+          ? item.quantity
+          : 1;
+
+      const product = await this.prisma.product.findFirst({
+        where: {
+          name: {
+            contains: name,
+            mode: 'insensitive',
+          },
+        },
+      });
+
+      if (!product) {
+        unmatched.push({ requestedName: rawName });
+        continue;
+      }
+
+      const storeProducts = await this.prisma.storeProduct.findMany({
+        where: {
+          productId: product.id,
+          inStock: true,
+        },
+        include: {
+          store: true,
+        },
+        orderBy: {
+          pricePence: 'asc',
+        },
+      });
+
+      if (!storeProducts.length) {
+        unmatched.push({ requestedName: rawName });
+        continue;
+      }
+
+      matched.push({
+        requestedName: rawName,
+        productId: product.id,
+        productName: product.name,
+        quantity,
+        availableAt: storeProducts.map((sp) => ({
+          storeId: sp.storeId,
+          storeName: sp.store.name,
+          pricePence: sp.pricePence,
+        })),
+      });
+    }
+
+    return {
+      matched,
+      unmatched,
+      countMatched: matched.length,
+      countUnmatched: unmatched.length,
+    };
+  }
+
+  async createFromRecipeScout(accountId: string, body: any) {
+    const preview = await this.previewFromRecipeScout(body);
+
+    if (!preview.matched.length) {
+      throw new BadRequestException('No matched items found to create an order');
+    }
+
+    const groupedByStore = new Map<
+      string,
+      {
+        storeId: string;
+        items: Array<{
+          productId: string;
+          quantity: number;
+        }>;
+      }
+    >();
+
+    for (const matchedItem of preview.matched) {
+      const cheapestStore = [...matchedItem.availableAt].sort(
+        (a, b) => a.pricePence - b.pricePence,
+      )[0];
+
+      if (!groupedByStore.has(cheapestStore.storeId)) {
+        groupedByStore.set(cheapestStore.storeId, {
+          storeId: cheapestStore.storeId,
+          items: [],
+        });
+      }
+
+      groupedByStore.get(cheapestStore.storeId)!.items.push({
+        productId: matchedItem.productId,
+        quantity: matchedItem.quantity,
+      });
+    }
+
+    const stores = Array.from(groupedByStore.values());
+    const createdOrder = await this.createOrder(accountId, { stores });
+
+    return {
+      createdOrder,
+      unmatched: preview.unmatched,
+      countMatched: preview.countMatched,
+      countUnmatched: preview.countUnmatched,
+    };
   }
 
   private mapOrderResponse(order: any) {
