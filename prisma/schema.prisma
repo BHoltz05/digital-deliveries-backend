@@ -11,6 +11,12 @@ enum App {
   RF
 }
 
+enum SubscriptionTier {
+  BRONZE
+  SILVER
+  GOLD
+}
+
 model Account {
   id            String   @id @default(uuid())
   app           App
@@ -20,7 +26,8 @@ model Account {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  ddProfile DdProfile?
+  ddProfile      DdProfile?
+  ddSubscription DdSubscription?
 
   @@unique([app, email])
   @@index([email])
@@ -38,6 +45,21 @@ model DdProfile {
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@map("dd_profile")
+}
+
+model DdSubscription {
+  id        String           @id @default(uuid())
+  accountId String           @unique @map("account_id")
+  tier      SubscriptionTier
+  active    Boolean          @default(true)
+  startedAt DateTime         @default(now()) @map("started_at")
+  renewsAt  DateTime         @map("renews_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("dd_subscriptions")
 }
 
 model Store {
